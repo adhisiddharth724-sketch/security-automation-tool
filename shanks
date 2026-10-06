@@ -1,0 +1,917 @@
+#!/bin/bash
+loading_bar() {
+    echo "Loading SHANKS Security Audit Tool..."
+    for i in {1..20}
+    do
+        echo -n "█"
+        sleep 0.1
+    done
+    echo ""
+}
+
+banner() {
+clear
+echo "
+███████╗██╗  ██╗ █████╗ ███╗   ██╗██╗  ██╗███████╗
+██╔════╝██║  ██║██╔══██╗████╗  ██║██║ ██╔╝██╔════╝
+███████╗███████║███████║██╔██╗ ██║█████╔╝ ███████╗
+╚════██║██╔══██║██╔══██║██║╚██╗██║██╔═██╗ ╚════██║
+███████║██║  ██║██║  ██║██║ ╚████║██║  ██╗███████║
+╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝
+
+        SECURITY AUDIT TOOL
+"
+}
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+LOGFILE="activity.log"
+
+PASSWORD="adhi2513"
+
+for i in  1 2 3
+do
+    echo -e "${BLUE}🔐 Security Audit Tool${NC}"
+echo -n "Enter Password: "
+read -s pass
+echo
+
+    if [ "$pass" = "$PASSWORD" ]
+    then
+        echo -e "${GREEN}ACCESS GRANTED!${NC}"
+        break
+    fi
+done
+
+if [ "$pass" != "$PASSWORD" ]
+then
+    echo -e " {RED}Too many attempts!${NC}"
+    exit
+fi
+
+scan_animation() {
+    echo -e "${YELLOW}Scanning...${NC}"
+
+    for i in  10 20 30 40 50 60 70 80 90 100
+    do
+        echo -ne "\r[${i}%] ██████████"
+        sleep 0.2
+    done
+
+    echo ""
+}
+
+system_info() {
+echo "$(date) - system information selected" 
+>>"$LOGFILE"
+
+    scan_animation
+
+    echo "===== System Information ====="
+    hostname
+    uname -r
+    uptime
+    free -h
+    df -h
+}
+
+user_audit() {
+    echo "$(date) - User Audit selected" >>"$LOGFILE"
+
+    echo "===== User Audit ====="
+    who
+    last | head
+
+
+}
+
+network_audit() {
+    echo "=================================="
+    echo "         NETWORK AUDIT"
+    echo "=================================="
+
+    IP=$(hostname -I | awk '{print $1}')
+    GATEWAY=$(ip route | grep default | awk '{print $3}')
+    INTERFACE=$(ip route | grep default | awk '{print $5}')
+    STATUS=$(cat /sys/class/net/$INTERFACE/operstate)
+    CONNECTIONS=$(ss -tun | tail -n +2 | wc -l)
+
+    echo "IP Address         : $IP"
+    echo "Gateway            : $GATEWAY"
+    echo "Interface          : $INTERFACE"
+    echo "Status             : $STATUS"
+    echo "Active Connections : $CONNECTIONS"
+}
+
+log_analysis() {
+    echo "$(date) - log_analysis selected" >>"$LOGFILE"
+
+    echo "===== Log Analysis ====="
+
+    echo "Current User:"
+    whoami
+
+    echo ""
+    echo "Recent Logins:"
+    last | head -5
+
+
+}
+
+generate_report() {
+    REPORT="audit_report_$(date +%F).txt"
+    
+    system_info > audit_report.txt
+    user_audit >> audit_report.txt
+    network_audit >> audit_report.txt
+    log_analysis >> audit_report.txt
+   
+    echo "report saved as $REPORT"
+}
+internet_check() {
+   
+    echo "$(date) - Internet Check selected" >>"$LOGFILE"
+
+    echo "Checking internet connection..."
+
+    if ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1
+    then
+        echo "Internet: Connected"
+    else
+        echo "Internet: Not Connected"
+    fi
+}
+view_activity_log() {
+    echo "================================"
+    echo "        ACTIVITY LOG"
+    echo "================================"
+
+    if [ -f "$LOGFILE" ]; then
+        cat "$LOGFILE"
+    else
+        echo "No activity log found."
+    fi
+
+}
+open_ports_audit() {
+    echo "=================================="
+    echo "       OPEN PORTS AUDIT"
+    echo "=================================="
+
+    ss -tuln
+}
+firewall_status_check() {
+    echo "=================================="
+    echo "      FIREWALL STATUS CHECK"
+    echo "=================================="
+
+    if [ "$EUID" -ne 0 ]; then
+        echo "please run as root (sudo)."
+        return
+    fi
+ if command -v ufw >/dev/null 2>&1; then ufw status
+    else
+        echo "UFW Firewall not installed."
+    fi
+}
+firewall_status_check() {
+    echo "=================================="
+    echo "      FIREWALL STATUS CHECK"
+    echo "=================================="
+
+    if [ "$EUID" -ne 0 ]; then
+        echo "Please run as root (sudo)."
+        return 1
+    fi
+
+    if command -v ufw >/dev/null 2>&1; then
+        ufw status verbose
+    else
+        echo "UFW Firewall not installed."
+    fi
+}
+
+
+firewall_attack_monitor() {
+    echo "=========================================="
+    echo "       FIREWALL ATTACK MONITOR"
+    echo "=========================================="
+
+    if [ "$EUID" -ne 0 ]; then
+        echo "[!] Please run with sudo."
+        return 1
+    fi
+
+    if ! command -v ufw >/dev/null 2>&1; then
+        echo "[!] UFW is not installed."
+        return 1
+    fi
+
+    echo "[+] Firewall status:"
+    ufw status
+
+    echo
+    echo "[+] Monitoring blocked connections..."
+    echo "[+] Press CTRL+C to stop: "
+
+    LOG="/var/log/ufw.log"
+
+    if [ ! -f "$LOG" ]; then
+        echo "[!] UFW log not found."
+        echo "    Run: sudo ufw logging on"
+        return 1
+    fi
+
+    tail -F "$LOG" | while read -r line
+    do
+        if echo "$line" | grep -q "UFW BLOCK"; then
+
+            SRC=$(echo "$line" | grep -oE 'SRC=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | cut -d= -f2)
+            DST=$(echo "$line" | grep -oE 'DST=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | cut -d= -f2)
+            DPT=$(echo "$line" | grep -oE 'DPT=[0-9]+' | cut -d= -f2)
+
+            echo
+            echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            echo "[!] SUSPICIOUS CONNECTION BLOCKED"
+            echo "    Source IP : $SRC"
+            echo "    Target IP : $DST"
+            echo "    Port      : $DPT"
+            echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        fi
+    done
+}
+
+real_time_network_monitor() {
+    while true
+    do
+        clear
+
+        echo "======================================"
+        echo "    REAL-TIME NETWORK MONITOR"
+        echo "======================================"
+        echo "Time: $(date)"
+        echo ""
+
+        ss -tunap
+
+        echo ""
+        echo "Refreshing every 5 seconds..."
+        echo "Press Q to return to main menu."
+
+        read -t 5 -n 1 key
+
+        if [[ "$key" == "q" || "$key" == "Q" ]]
+        then
+            return
+        fi
+    done
+}
+security_dashboard() {
+
+    clear
+
+    echo "=========================================="
+    echo "        SHANKS SECURITY DASHBOARD"
+    echo "=========================================="
+
+    # System
+    HOSTNAME=$(hostname)
+
+    # Network
+    IP=$(hostname -I | awk '{print $1}')
+
+    # Internet
+    if ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1
+    then
+        INTERNET="CONNECTED"
+    else
+        INTERNET="NOT CONNECTED"
+    fi
+
+    # Firewall
+    if command -v ufw >/dev/null 2>&1
+    then
+        if ufw status | grep -q "Status: active"
+        then
+            FIREWALL="ACTIVE"
+        else
+            FIREWALL="INACTIVE"
+        fi
+    else
+        FIREWALL="NOT INSTALLED"
+    fi
+
+    # Open ports
+    OPEN_PORTS=$(ss -tuln | tail -n +2 | wc -l)
+
+    # Active connections
+    CONNECTIONS=$(ss -tun | tail -n +2 | wc -l)
+
+    # Failed login attempts
+    if [ -f /var/log/auth.log ]
+    then
+        FAILED_LOGINS=$(grep -i "failed password" /var/log/auth.log 2>/dev/null | wc -l)
+    else
+        FAILED_LOGINS="N/A"
+    fi
+
+    # Security score
+    SCORE=100
+
+    if [ "$FIREWALL" != "ACTIVE" ]
+    then
+        SCORE=$((SCORE - 25))
+    fi
+
+    if [ "$INTERNET" != "CONNECTED" ]
+    then
+        SCORE=$((SCORE - 10))
+    fi
+
+    if [ "$OPEN_PORTS" -gt 10 ]
+    then
+        SCORE=$((SCORE - 15))
+    elif [ "$OPEN_PORTS" -gt 5 ]
+    then
+        SCORE=$((SCORE - 5))
+    fi
+
+    if [ "$FAILED_LOGINS" != "N/A" ] && [ "$FAILED_LOGINS" -gt 20 ]
+    then
+        SCORE=$((SCORE - 15))
+    fi
+
+    echo
+    echo "System Information"
+    echo "------------------------------------------"
+    echo "Hostname          : $HOSTNAME"
+    echo "IP Address        : $IP"
+
+    echo
+    echo "Security Status"
+    echo "------------------------------------------"
+    echo "Internet          : $INTERNET"
+    echo "Firewall          : $FIREWALL"
+    echo "Open Ports        : $OPEN_PORTS"
+    echo "Active Connections: $CONNECTIONS"
+    echo "Failed Logins     : $FAILED_LOGINS"
+
+    echo
+    echo "Security Score"
+    echo "------------------------------------------"
+    echo "Score             : $SCORE / 100"
+
+    if [ "$SCORE" -ge 80 ]
+    then
+        echo "Status            : GOOD"
+    elif [ "$SCORE" -ge 60 ]
+    then
+        echo "Status            : MODERATE"
+    else
+        echo "Status            : NEEDS ATTENTION"
+    fi
+
+    echo
+    echo "=========================================="
+}
+software_package_audit() {
+
+    clear
+
+    echo "======================================================"
+    echo "          SHANKS SOFTWARE / PACKAGE AUDIT"
+    echo "======================================================"
+
+    echo
+    echo "[+] System      : $(hostname)"
+    echo "[+] Date        : $(date)"
+    echo "[+] Package Mgr : APT / DPKG"
+
+    # --------------------------------------------------
+    # 1. Installed Package Count
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[1] INSTALLED PACKAGES"
+    echo "------------------------------------------------------"
+
+    if command -v dpkg >/dev/null 2>&1
+    then
+        INSTALLED=$(dpkg-query -W -f='${binary:Package}\n' 2>/dev/null | wc -l)
+
+        echo "Installed Packages : $INSTALLED"
+    else
+        echo "[!] DPKG not available."
+        return 1
+    fi
+
+
+    # --------------------------------------------------
+    # 2. Update Repository
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[2] PACKAGE REPOSITORY STATUS"
+    echo "------------------------------------------------------"
+
+    echo "[+] Updating package information..."
+
+    if apt-get update >/dev/null 2>&1
+    then
+        echo "[✓] Repository information updated."
+    else
+        echo "[!] Failed to update repository information."
+    fi
+
+
+    # --------------------------------------------------
+    # 3. Available Updates
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[3] AVAILABLE UPDATES"
+    echo "------------------------------------------------------"
+
+    UPDATES=$(apt list --upgradable 2>/dev/null | tail -n +2)
+
+    if [ -z "$UPDATES" ]
+    then
+        UPDATE_COUNT=0
+
+        echo "[✓] No package updates available."
+
+    else
+        UPDATE_COUNT=$(echo "$UPDATES" | wc -l)
+
+        echo "[!] Updates Available : $UPDATE_COUNT"
+        echo
+
+        echo "$UPDATES" | head -20
+
+        if [ "$UPDATE_COUNT" -gt 20 ]
+        then
+            echo
+            echo "... and more."
+        fi
+    fi
+
+
+    # --------------------------------------------------
+    # 4. Held Packages
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[4] HELD PACKAGES"
+    echo "------------------------------------------------------"
+
+    HELD=$(apt-mark showhold 2>/dev/null)
+
+    if [ -z "$HELD" ]
+    then
+        HELD_COUNT=0
+        echo "[✓] No packages are being held."
+    else
+        HELD_COUNT=$(echo "$HELD" | wc -l)
+
+        echo "[!] Held Packages : $HELD_COUNT"
+        echo
+        echo "$HELD"
+    fi
+
+
+    # --------------------------------------------------
+    # 5. Recently Installed Packages
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[5] RECENTLY INSTALLED PACKAGES"
+    echo "------------------------------------------------------"
+
+    if [ -f /var/log/dpkg.log ]
+    then
+        grep " install " /var/log/dpkg.log 2>/dev/null | tail -10
+    else
+        echo "[!] dpkg.log not found."
+    fi
+
+
+    # --------------------------------------------------
+    # 6. Package Manager Health
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[6] PACKAGE MANAGER HEALTH"
+    echo "------------------------------------------------------"
+
+    if dpkg --audit 2>/dev/null | grep -q .
+    then
+        echo "[!] Package manager reports problems:"
+        dpkg --audit
+        PACKAGE_STATUS="ATTENTION REQUIRED"
+    else
+        echo "[✓] No broken package configuration detected."
+        PACKAGE_STATUS="HEALTHY"
+    fi
+
+
+    # --------------------------------------------------
+    # 7. Security Summary
+    # --------------------------------------------------
+
+    echo
+    echo "======================================================"
+    echo "                 AUDIT SUMMARY"
+    echo "======================================================"
+
+    echo "Installed Packages : $INSTALLED"
+    echo "Available Updates  : $UPDATE_COUNT"
+    echo "Held Packages      : $HELD_COUNT"
+    echo "Package Manager    : $PACKAGE_STATUS"
+
+    echo
+    echo "Security Assessment:"
+    echo "------------------------------------------------------"
+
+    if [ "$PACKAGE_STATUS" != "HEALTHY" ]
+    then
+        echo "[HIGH] Package manager requires attention."
+
+    elif [ "$UPDATE_COUNT" -gt 20 ]
+    then
+        echo "[MEDIUM] Large number of package updates available."
+
+    elif [ "$UPDATE_COUNT" -gt 0 ]
+    then
+        echo "[LOW] Package updates are available."
+
+    else
+        echo "[GOOD] System packages appear up to date."
+    fi
+
+    echo
+    echo "======================================================"
+    echo "          SOFTWARE AUDIT COMPLETED"
+    echo "======================================================"
+}
+file_permission_audit() {
+
+    clear
+
+    echo "======================================================"
+    echo "          SHANKS FILE PERMISSION AUDIT"
+    echo "======================================================"
+    echo "Started : $(date)"
+    echo
+
+    # --------------------------------------------------
+    # Counters
+    # --------------------------------------------------
+
+    WORLD_WRITABLE_FILES=0
+    WORLD_WRITABLE_DIRS=0
+    SUID_COUNT=0
+    SGID_COUNT=0
+    SENSITIVE_ISSUES=0
+
+    HIGH=0
+    MEDIUM=0
+    INFO=0
+
+    # --------------------------------------------------
+    # 1. World-Writable Files
+    # --------------------------------------------------
+
+    echo "------------------------------------------------------"
+    echo "[1] WORLD-WRITABLE FILES"
+    echo "------------------------------------------------------"
+
+    WW_FILES=$(find / \
+        -xdev \
+        -type f \
+        -perm -0002 \
+        -not -path "/proc/*" \
+        -not -path "/sys/*" \
+        -not -path "/run/*" \
+        2>/dev/null)
+
+    if [ -z "$WW_FILES" ]
+    then
+        echo "[✓] No world-writable files found."
+    else
+        echo "$WW_FILES" | head -30
+
+        WORLD_WRITABLE_FILES=$(echo "$WW_FILES" | wc -l)
+
+        echo
+        echo "[!] Found: $WORLD_WRITABLE_FILES world-writable file(s)"
+
+        HIGH=$((HIGH + 1))
+    fi
+
+
+    # --------------------------------------------------
+    # 2. World-Writable Directories
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[2] WORLD-WRITABLE DIRECTORIES"
+    echo "------------------------------------------------------"
+
+    WW_DIRS=$(find / \
+        -xdev \
+        -type d \
+        -perm -0002 \
+        -not -path "/proc/*" \
+        -not -path "/sys/*" \
+        -not -path "/run/*" \
+        2>/dev/null)
+
+    if [ -z "$WW_DIRS" ]
+    then
+        echo "[✓] No world-writable directories found."
+    else
+
+        echo "$WW_DIRS" | while read -r DIR
+        do
+            PERM=$(stat -c "%A" "$DIR" 2>/dev/null)
+
+            # Sticky bit = safer shared directory
+            if [[ "$PERM" == *t ]]
+            then
+                echo "[INFO] $DIR  $PERM  (sticky bit)"
+            else
+                echo "[WARN] $DIR  $PERM"
+            fi
+        done
+
+        WORLD_WRITABLE_DIRS=$(echo "$WW_DIRS" | wc -l)
+
+        echo
+        echo "[!] Found: $WORLD_WRITABLE_DIRS world-writable directorie(s)"
+
+        MEDIUM=$((MEDIUM + 1))
+    fi
+
+
+    # --------------------------------------------------
+    # 3. SUID Files
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[3] SUID FILES"
+    echo "------------------------------------------------------"
+
+    SUID_FILES=$(find / \
+        -xdev \
+        -type f \
+        -perm -4000 \
+        -not -path "/proc/*" \
+        -not -path "/sys/*" \
+        2>/dev/null)
+
+    if [ -z "$SUID_FILES" ]
+    then
+        echo "[✓] No SUID files found."
+    else
+
+        echo "$SUID_FILES" | head -30
+
+        SUID_COUNT=$(echo "$SUID_FILES" | wc -l)
+
+        echo
+        echo "[INFO] SUID files found: $SUID_COUNT"
+        echo "[INFO] Review unexpected SUID binaries."
+
+        INFO=$((INFO + 1))
+    fi
+
+
+    # --------------------------------------------------
+    # 4. SGID Files
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[4] SGID FILES"
+    echo "------------------------------------------------------"
+
+    SGID_FILES=$(find / \
+        -xdev \
+        -type f \
+        -perm -2000 \
+        -not -path "/proc/*" \
+        -not -path "/sys/*" \
+        2>/dev/null)
+
+    if [ -z "$SGID_FILES" ]
+    then
+        echo "[✓] No SGID files found."
+    else
+
+        echo "$SGID_FILES" | head -30
+
+        SGID_COUNT=$(echo "$SGID_FILES" | wc -l)
+
+        echo
+        echo "[INFO] SGID files found: $SGID_COUNT"
+        echo "[INFO] Review unexpected SGID binaries."
+
+        INFO=$((INFO + 1))
+    fi
+
+
+    # --------------------------------------------------
+    # 5. Sensitive File Permissions
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[5] SENSITIVE FILE PERMISSIONS"
+    echo "------------------------------------------------------"
+
+    SENSITIVE_FILES=(
+        "/etc/passwd"
+        "/etc/shadow"
+        "/etc/group"
+        "/etc/sudoers"
+    )
+
+    for FILE in "${SENSITIVE_FILES[@]}"
+    do
+
+        if [ -e "$FILE" ]
+        then
+
+            PERM=$(stat -c "%a" "$FILE" 2>/dev/null)
+            OWNER=$(stat -c "%U:%G" "$FILE" 2>/dev/null)
+
+            echo
+            echo "File   : $FILE"
+            echo "Owner  : $OWNER"
+            echo "Mode   : $PERM"
+
+            # Check whether others have write permission
+            if [ $((PERM % 10)) -ge 2 ]
+            then
+                echo "[HIGH] Others have write permission!"
+                SENSITIVE_ISSUES=$((SENSITIVE_ISSUES + 1))
+                HIGH=$((HIGH + 1))
+            else
+                echo "[✓] Others cannot write."
+            fi
+
+        fi
+
+    done
+
+
+    # --------------------------------------------------
+    # 6. Home Directory Permissions
+    # --------------------------------------------------
+
+    echo
+    echo "------------------------------------------------------"
+    echo "[6] HOME DIRECTORY PERMISSIONS"
+    echo "------------------------------------------------------"
+
+    for HOME_DIR in /home/*
+    do
+
+        if [ -d "$HOME_DIR" ]
+        then
+
+            PERM=$(stat -c "%A" "$HOME_DIR" 2>/dev/null)
+            OWNER=$(stat -c "%U" "$HOME_DIR" 2>/dev/null)
+
+            echo
+            echo "Directory : $HOME_DIR"
+            echo "Owner     : $OWNER"
+            echo "Permission: $PERM"
+
+            if [ -w "$HOME_DIR" ] && [ ! -O "$HOME_DIR" ]
+            then
+                echo "[WARN] Directory may be writable by another user."
+                MEDIUM=$((MEDIUM + 1))
+            else
+                echo "[✓] No obvious ownership/write issue."
+            fi
+
+        fi
+
+    done
+
+
+    # --------------------------------------------------
+    # 7. Final Summary
+    # --------------------------------------------------
+
+    echo
+    echo "======================================================"
+    echo "                 AUDIT SUMMARY"
+    echo "======================================================"
+
+    echo
+    echo "World-Writable Files : $WORLD_WRITABLE_FILES"
+    echo "World-Writable Dirs  : $WORLD_WRITABLE_DIRS"
+    echo "SUID Files           : $SUID_COUNT"
+    echo "SGID Files           : $SGID_COUNT"
+    echo "Sensitive Issues     : $SENSITIVE_ISSUES"
+
+    echo
+    echo "Severity Summary"
+    echo "------------------------------------------------------"
+
+    echo "HIGH                 : $HIGH"
+    echo "MEDIUM               : $MEDIUM"
+    echo "INFO                 : $INFO"
+
+    echo
+
+    if [ "$HIGH" -gt 0 ]
+    then
+        echo "[HIGH RISK] Permission issues require investigation."
+
+    elif [ "$MEDIUM" -gt 0 ]
+    then
+        echo "[MEDIUM] Permission findings require review."
+
+    else
+        echo "[GOOD] No major permission issues detected."
+    fi
+
+    echo
+    echo "======================================================"
+    echo "          FILE PERMISSION AUDIT COMPLETED"
+    echo "======================================================"
+}
+
+clear
+banner
+loading_bar
+
+while true
+do
+    clear
+    banner
+
+    echo -e "${BLUE}================================${NC}"
+    echo -e "${GREEN}    SECURITY AUDIT TOOL         ${NC}"
+    echo -e "${BLUE}================================${NC}"
+
+    echo -e "${YELLOW}1.${NC} System Information"
+    echo -e "${YELLOW}2.${NC} User Audit"
+    echo -e "${YELLOW}3.${NC} Network Audit"
+    echo -e "${YELLOW}4.${NC} Log Analysis"
+    echo -e "${YELLOW}5.${NC} Generate Report"
+    echo -e "${YELLOW}6.${NC} Internet Check"
+    echo -e "${YELLOW}7.${NC} View Activity Log"
+    echo -e "${YELLOW}8.${NC} Open Ports Audit"
+    echo -e "${YELLOW}9.${NC} Firewall Status CHeck"
+    echo -e "${YELLOW}10.${NC} Firewall Attack Monitor"
+    echo -e "${YELLOW}11.${NC} Real Time Network Monitor"
+    echo -e "${YELLOW}12.${NC} Security Dashboard"
+    echo -e "${YELLOW}13.${NC} Software / Package Audit"
+    echo -e "${YELLOW}14.${NC} File Permission Audit"
+    echo -e "${RED}0.${NC} Exit"
+
+    echo
+
+
+    read -p "Select Option: " choice
+
+    case $choice in
+ 
+    1) system_info ;;
+    2) user_audit ;;
+    3) network_audit ;;
+    4) log_analysis ;;
+    5) generate_report ;;
+    6) internet_check ;;
+    7) view_activity_log ;;
+    8) open_ports_audit ;;
+    9) firewall_status_check;;
+    10) firewall_attack_monitor;;
+    11) real_time_network_monitor;;
+    12) security_dashboard ;;
+    13) software_package_audit ;;
+    14) file_permission_audit ;;
+    0) exit 0;;
+    *) echo "Invalid Option" ;;
+esac
+
+echo 
+read -p "PRESS ENTER TO CONTINUE....................."    
+done
+ 
