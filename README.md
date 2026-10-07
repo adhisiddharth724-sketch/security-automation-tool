@@ -7,6 +7,13 @@
 ---
 
 ## 🚀 Features
+## 🔐 Access / Authentication
+
+PASSWORD : "Adhi2513"
+
+'''''''''
+
+**Never commit passwords, API keys, tokens, or other secrets to GitHub.**
 
 ### 🖥️ System Information
 
